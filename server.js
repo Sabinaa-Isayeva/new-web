@@ -1,54 +1,49 @@
-const express = require("express")
-const { QuickDB } = require("quick.db")
+const webServer = require("express");
+const { QuickDB } = require("quick.db");
 
-const db = new QuickDB()
-const app = express()
-app.set('view engine', 'html');
+const localData = new QuickDB();
+const portal = webServer();
 
-app.set("view engine", "ejs")
+portal.set("view engine", "ejs");
+portal.use(webServer.static("assets")); 
+portal.use(webServer.urlencoded({ extended: true }));
+portal.use(webServer.json());
 
-app.use(express.static("public"))
-app.use(express.urlencoded({ extended: true }))
-app.use(express.json())
+// qeydiyyat bolmesi
+portal.post("/create-profile", async (request, response) => {
+    const { login, secretKey } = request.body;
 
+    const account = await localData.get(`members.${login}`);
 
-// signup
-app.post("/signup", async (req, res) => {
+    if (account) return response.send("Bu istifadəçi artıq mövcuddur");
 
-    const { username, password } = req.body
+    await localData.set(`members.${login}`, {
+        login,
+        secretKey
+    });
 
-    const user = await db.get(`users.${username}`)
+    response.send("Hesab uğurla yaradıldı");
+});
 
-    if (user) return res.send("User exists")
+// giris bolmesi
+portal.post("/verify-access", async (req, res) => {
+    const { login, secretKey } = req.body;
 
-    await db.set(`users.${username}`, {
-        username,
-        password
-    })
+    const entry = await localData.get(`members.${login}`);
 
-    res.send("Account created")
+    if (!entry) return res.send("İstifadəçi tapılmadı");
 
-})
+    if (entry.secretKey !== secretKey)
+        return res.send("Şifrə yanlışdır");
 
-// login
-app.post("/login", async (req, res) => {
+    res.send("Giriş uğurla tamamlandı");
+});
 
-    const { username, password } = req.body
+portal.get("/", async (req, res) => {
+    res.render("index", { title: "Giriş Paneli", info: null });
+});
 
-    const user = await db.get(`users.${username}`)
-
-    if (!user) return res.send("User not found")
-
-    if (user.password !== password)
-        return res.send("Wrong password")
-
-    res.send("Login successful")
-
-})
-
-app.get("/", async (req,res) => {
-    res.render("index", {title: "Login Signup", message: null})
-})
-
-
-app.listen(3000)
+const PORT = 3000;
+portal.listen(PORT, () => {
+    console.log(`Server ${PORT} portunda aktivdir`);
+});
